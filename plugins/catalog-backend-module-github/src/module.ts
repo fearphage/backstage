@@ -20,10 +20,47 @@ import {
   configServiceRef,
   loggerServiceRef,
   schedulerServiceRef,
+  createServiceRef,
+  createServiceFactory,
 } from '@backstage/backend-plugin-api';
 import { TaskScheduleDefinition } from '@backstage/backend-tasks';
+import {
+  DefaultGithubCredentialsProvider,
+  GithubCredentialsProvider,
+  ScmIntegrations,
+} from '@backstage/integration';
 import { catalogProcessingExtensionPoint } from '@backstage/plugin-catalog-node';
 import { GitHubEntityProvider } from './providers/GitHubEntityProvider';
+
+export const githubCredentialProviderServiceRef =
+  createServiceRef<GithubCredentialsProvider>({
+    id: 'github.credentialsProvider',
+    defaultFactory: async service =>
+      createServiceFactory({
+        service,
+        deps: {
+          configFactory: configServiceRef,
+        },
+        factory: async ({ configFactory }) => {
+          const config = await configFactory('root');
+          const integrations = ScmIntegrations.fromConfig(config);
+          return async () => {
+            return DefaultGithubCredentialsProvider.fromIntegrations(
+              integrations,
+            );
+          };
+        },
+      }),
+  });
+
+/**
+ * Path forward:
+ *
+ * - Don't be afraid to create -node packages
+ * - Implement default factories
+ *    - Duplication should be handled by creating duplicate implementations, which should be fine
+ * - Define catalog client service in @backstage/plugin-catalog-node
+ */
 
 /**
  * Options for {@link githubEntityProviderCatalogModule}.

@@ -65,7 +65,12 @@ export type AnyServiceFactory = ServiceFactory<
 /**
  * @public
  */
-export function createServiceRef<T>(options: { id: string }): ServiceRef<T> {
+export function createServiceRef<T>(options: {
+  id: string;
+  defaultFactory?: (
+    service: ServiceRef<T>,
+  ) => Promise<ServiceFactory<T, T, {}>>;
+}): ServiceRef<T> {
   return {
     id: options.id,
     get T(): T {
