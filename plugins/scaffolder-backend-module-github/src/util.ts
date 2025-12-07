@@ -116,3 +116,52 @@ export async function getOctokitOptions(options: {
     previews: ['nebula-preview'],
   };
 }
+
+export const pollUntilValid = async ({alwaysResolve, fn, validate, interval, signal}) => {
+  const error = new DOMException('polling aborted', 'AbortError');
+  if (signal?.aborted) {
+    if (alwaysResolve) {
+      return Promise.resolve(alwaysResolve);
+    }
+    throw error;
+  }
+
+  return new Promise((resolve, reject) => {
+    const controller = new AbortController();
+    const poll = async () => {
+      if (signal?.aborted) {
+        reject(error);
+        return;
+      }
+
+      const result = await fn({ signal });
+      if (validate(result)) {
+        resolve(result);
+        controller.abort();
+        return;
+      }
+
+      const timeoutId = setTimeout(poll, interval);
+      signal?.addEventListener(
+        'abort',
+        () => {
+          clearTimeout(timeoutId);
+
+          if (alwaysResolve) {
+            resolve(alwaysResolve);
+          }
+          else {
+            reject(error);
+          }
+          controller.abort();
+        },
+        {
+          once: true,
+          signal: controller.signal,
+        },
+      );
+    };
+
+    poll();
+  });
+};

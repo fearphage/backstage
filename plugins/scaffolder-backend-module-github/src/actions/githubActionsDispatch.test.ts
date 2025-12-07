@@ -14,16 +14,13 @@
  * limitations under the License.
  */
 
-import { ConfigReader } from '@backstage/config';
 import { ScmIntegrations } from '@backstage/integration';
-import { createGithubActionsDispatchAction } from './githubActionsDispatch';
-import { getVoidLogger } from '@backstage/backend-common';
+import { ConfigReader } from '@backstage/config';
 import { createMockActionContext } from '@backstage/plugin-scaffolder-node-test-utils';
+import { createGithubActionsDispatchAction } from './githubActionsDispatch';
+import { mockServices } from '@backstage/backend-test-utils';
 import unzipper from 'unzipper';
 import { Buffer } from 'buffer';
-
-// FIX 1: Revert to legacy timers
-jest.useFakeTimers();
 
 // Mock octokit
 const mockCreateWorkflowDispatch = jest.fn();
@@ -61,30 +58,42 @@ const mockDirectory = {
 describe('github:actions:dispatch', () => {
   const config = new ConfigReader({
     integrations: {
-      github: [{ host: 'github.com', token: 'test-token' }],
+      github: [
+        { host: 'github.com', token: 'tokenlols' },
+      ],
     },
   });
   const integrations = ScmIntegrations.fromConfig(config);
   const action = createGithubActionsDispatchAction({ integrations });
-  const logger = getVoidLogger();
-
-  // We control the clock so `dispatchTimestamp` and `created_at` match.
-  const MOCK_TIME = new Date('2025-11-05T12:00:00.000Z');
-  const MOCK_TIMESTAMP = MOCK_TIME.getTime();
+  const logger = mockServices.logger.mock();
+  const now = Date.now();
 
   const mockRun = {
     id: 12345,
     html_url: 'https://github.com/owner/repo/actions/runs/12345',
-    created_at: MOCK_TIME.toISOString(), // Use our controlled time
+    created_at: new Date(now + 20_000).toISOString(),
     status: 'completed',
     conclusion: 'success',
   };
 
+  beforeAll(() => {
+    jest.useFakeTimers({
+      doNotFake: ['nextTick'],
+      now,
+    });
+  });
+
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   beforeEach(() => {
-    jest.clearAllMocks();
     mockUnzipper.Open.buffer.mockResolvedValue(mockDirectory);
-    // Make Date.now() return our controlled time
-    jest.spyOn(Date, 'now').mockReturnValue(MOCK_TIMESTAMP);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+    jest.clearAllTimers();
   });
 
   const baseInput = {
@@ -94,7 +103,7 @@ describe('github:actions:dispatch', () => {
     initialWaitSeconds: 5,
     pollIntervalSeconds: 10,
     timeoutMinutes: 30,
-    waitForCompletion: false, 
+    waitForCompletion: false,
   };
 
   it('should dispatch a workflow and not wait', async () => {
@@ -104,14 +113,12 @@ describe('github:actions:dispatch', () => {
 
     const context = createMockActionContext({
       input: baseInput,
-      logger,
-      checkpoint: async ({ fn }) => fn(), // FIX 3: Correct checkpoint type
-      output: jest.fn(),
     });
 
-    const handlerPromise = action.handler(context);
-    jest.runAllTimers(); // Use legacy timers
-    await handlerPromise;
+    process.nextTick(() => {
+      jest.advanceTimersByTime(2_001);
+    });
+    await action.handler(context);
 
     expect(mockCreateWorkflowDispatch).toHaveBeenCalledWith({
       owner: 'owner',
@@ -140,14 +147,13 @@ describe('github:actions:dispatch', () => {
         waitForCompletion: true,
         pollIntervalSeconds: 1,
       },
-      logger,
-      checkpoint: async ({ fn }) => fn(), 
-      output: jest.fn(),
     });
 
-    const handlerPromise = action.handler(context);
-    jest.runAllTimers(); // Use legacy timers
-    await handlerPromise;
+    process.nextTick(() => {
+      jest.advanceTimersByTime(2_001);
+    });
+    await action.handler(context);
+    expect(context.output).toHaveBeenCalledWith('runId', mockRun.id);
 
     expect(mockGetWorkflowRun).toHaveBeenCalledTimes(2);
     expect(context.output).toHaveBeenCalledWith('runId', mockRun.id);
@@ -167,17 +173,11 @@ describe('github:actions:dispatch', () => {
 
     const context = createMockActionContext({
       input: { ...baseInput, waitForCompletion: true },
-      logger,
-      checkpoint: async ({ fn }) => fn(),
-      output: jest.fn(),
     });
 
-    // Use legacy timer fix for rejected promises
-    await expect(async () => {
-      const handlerPromise = action.handler(context);
-      jest.runAllTimers();
-      await handlerPromise;
-    }).rejects.toThrow(/Workflow run failed with conclusion: failure/);
+    await expect(
+      action.handler(context)
+    ).rejects.toThrow(/Workflow run failed with conclusion: failure/);
   });
 
   it('should throw on timeout', async () => {
@@ -191,24 +191,20 @@ describe('github:actions:dispatch', () => {
       input: {
         ...baseInput,
         waitForCompletion: true,
-        timeoutMinutes: 1, 
+        timeoutMinutes: 1,
         pollIntervalSeconds: 30,
       },
-      logger,
-      checkpoint: async ({ fn }) => fn(),
-      output: jest.fn(),
+    });
+    jest.spyOn(AbortSignal, 'timeout').mockImplementation(limit => {
+      const controller = new AbortController();
+      setTimeout(() => controller.abort(), limit);
+      return controller.signal;
     });
 
-    
     const handlerPromise = action.handler(context);
-
-    // Advance clock by 30s (poll 1)
-    jest.advanceTimersByTime(30000);
-    // Advance clock by 30s (poll 2)
-    jest.advanceTimersByTime(30000);
-    // Advance clock by 1ms (to go over the 1min/60s timeout
-    jest.advanceTimersByTime(1);
-
+    process.nextTick(() => {
+      jest.advanceTimersByTime(60_001);
+    });
     await expect(handlerPromise).rejects.toThrow(
       /Timed out waiting for workflow completion after 1 minutes/,
     );
@@ -225,7 +221,7 @@ describe('github:actions:dispatch', () => {
     mockListWorkflowRuns.mockResolvedValue({
       data: { workflow_runs: [mockRun] },
     });
-    mockGetWorkflowRun.mockResolvedValue({ data: mockRun });
+    mockGetWorkflowRun.mockResolvedValueOnce({ data: { ...mockRun, status: 'completed' } });
     mockListWorkflowRunArtifacts.mockResolvedValue({
       data: { artifacts: [artifact] },
     });
@@ -237,14 +233,17 @@ describe('github:actions:dispatch', () => {
         waitForCompletion: true,
         outputArtifactName: 'my-artifact',
       },
-      logger,
-      checkpoint: async ({ fn }) => fn(),
-      output: jest.fn(),
     });
 
-    const handlerPromise = action.handler(context);
-    jest.runAllTimers(); 
-    await handlerPromise;
+    process.nextTick(() => {
+      // sometimes the test finishes before the nextTick fires and its
+      // inconsistent so ensure that fake timers are mocked before calling
+      // to prevent a noisy error (even thought the test still passes)
+      if (jest.isMockFunction(setTimeout)) {
+        jest.advanceTimersByTime(2_001);
+      }
+    });
+    await action.handler(context);
 
     expect(mockListWorkflowRunArtifacts).toHaveBeenCalledWith({
       owner: 'owner',

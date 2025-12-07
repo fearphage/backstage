@@ -14,19 +14,16 @@
  * limitations under the License.
  */
 
+import { ScmIntegrationRegistry } from '@backstage/integration';
 import {
   createTemplateAction,
   parseRepoUrl,
 } from '@backstage/plugin-scaffolder-node';
-import { ScmIntegrationRegistry } from '@backstage/integration';
 import { Octokit } from 'octokit';
-import { getOctokitOptions } from '../util';
+import { getOctokitOptions, pollUntilValid } from '../util';
 import { examples } from './githubActionsDispatch.examples';
 import { Buffer } from 'buffer';
 import unzipper from 'unzipper';
-
-// Helper to use in loops
-const sleep = (ms: number) => new Promise(res => setTimeout(res, ms));
 
 /**
  * Dispatches a GitHub Action workflow, optionally waits for completion, and can fetch outputs.
@@ -130,7 +127,7 @@ export function createGithubActionsDispatchAction(options: {
         repoUrl,
         workflowId,
         branchOrTagName,
-        workflowInputs,
+        workflowInputs: inputs,
         token: providedToken,
         waitForCompletion = false,
         outputArtifactName,
@@ -151,11 +148,12 @@ export function createGithubActionsDispatchAction(options: {
       }
 
       const token = providedToken ?? integration.config.token;
-      const client = new Octokit(
-        await getOctokitOptions({ token, integrations, repoUrl }),
-      );
+      const client = new Octokit({
+        ...await getOctokitOptions({ token, integrations, repoUrl }),
+        log: ctx.logger,
+      });
 
-      
+
       // This step is idempotent. If it's re-run, it returns the saved runId/runUrl.
       const { runId, runUrl } = await ctx.checkpoint({
         key: `dispatch-and-find-${owner}-${repo}-${workflowId.replace(
@@ -169,38 +167,41 @@ export function createGithubActionsDispatchAction(options: {
 
           const dispatchTimestamp = Date.now();
           await client.rest.actions.createWorkflowDispatch({
+            inputs,
             owner,
+            ref: branchOrTagName,
             repo,
             workflow_id: workflowId,
-            ref: branchOrTagName,
-            inputs: workflowInputs,
           });
 
           ctx.logger.info(`Workflow dispatched. Waiting for run to appear...`);
 
-          const initialWaitMs = initialWaitSeconds! * 1000;
-          let workflowRun;
+          const initialWaitMs = initialWaitSeconds! * 1_000;
           const findStartTime = Date.now();
-          while (Date.now() - findStartTime < initialWaitMs) {
-            const { data } = await client.rest.actions.listWorkflowRuns({
+          const workflowData = await pollUntilValid({
+            fn: () => client.rest.actions.listWorkflowRuns({
+              branch: branchOrTagName,
+              event: 'workflow_dispatch',
               owner,
+              per_page: 5,
               repo,
               workflow_id: workflowId,
-              event: 'workflow_dispatch',
-              branch: branchOrTagName,
-              per_page: 5,
-            });
-
-            workflowRun = data.workflow_runs
+            }).then(({ data }) => data),
+            interval: pollIntervalSeconds * 1_000,
+            signal: AbortSignal.timeout(timeoutMinutes * 60 * 1000),
+            validate: data => (
+              data.workflow_runs
               .filter(run => +new Date(run.created_at) >= dispatchTimestamp)
               .sort(
                 (a, b) => +new Date(b.created_at) - +new Date(a.created_at),
-              )[0];
-
-            if (workflowRun) break;
-
-            await sleep(5000); // Wait 5 seconds AFTER checking
-          }
+              )[0]
+            ),
+          });
+          const workflowRun = workflowData.workflow_runs
+          .filter(run => +new Date(run.created_at) >= dispatchTimestamp)
+          .sort(
+            (a, b) => +new Date(b.created_at) - +new Date(a.created_at),
+          )[0];
 
           if (!workflowRun) {
             throw new Error(
@@ -221,7 +222,6 @@ export function createGithubActionsDispatchAction(options: {
         return;
       }
 
-      
       const conclusion = await ctx.checkpoint({
         key: `poll-${runId}`,
         fn: async () => {
@@ -229,30 +229,18 @@ export function createGithubActionsDispatchAction(options: {
             `Polling workflow run ${runId} for completion... (Timeout: ${timeoutMinutes}m)`,
           );
 
-          const timeoutMs = timeoutMinutes! * 60 * 1000;
-          const pollIntervalMs = pollIntervalSeconds! * 1000;
-          const pollStartTime = Date.now();
-          let runData;
-
-          while (Date.now() - pollStartTime < timeoutMs) {
-            const { data: run } = await client.rest.actions.getWorkflowRun({
+          const runData = await pollUntilValid({
+            alwaysResolve: {},
+            fn: () => client.rest.actions.getWorkflowRun({
               owner,
               repo,
               run_id: runId,
-            });
-
-            if (run.status === 'completed') {
-              runData = run;
-              break;
-            }
-
-            ctx.logger.info(
-              `Workflow status is ${run.status}. Waiting ${pollIntervalSeconds}s...`,
-            );
-            await sleep(pollIntervalMs);
-          }
-
-          if (!runData || runData.status !== 'completed') {
+            }).then(({ data }) => data),
+            interval: pollIntervalSeconds * 1_000,
+            signal: AbortSignal.timeout(timeoutMinutes * 60 * 1000),
+            validate: ({ status }) => status === 'completed',
+          });
+          if (runData?.status !== 'completed') {
             throw new Error(
               `Timed out waiting for workflow completion after ${timeoutMinutes} minutes.`,
             );
@@ -275,7 +263,6 @@ export function createGithubActionsDispatchAction(options: {
         return;
       }
 
-      
       const outputs = await ctx.checkpoint({
         key: `artifact-${runId}-${outputArtifactName}`,
         fn: async () => {
