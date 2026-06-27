@@ -54,49 +54,7 @@ export function createPublishGithubAction(options: {
     examples,
     schema: {
       input: {
-        repoUrl: inputProps.repoUrl,
-        description: inputProps.description,
-        homepage: inputProps.homepage,
-        access: inputProps.access,
-        bypassPullRequestAllowances: inputProps.bypassPullRequestAllowances,
-        requiredApprovingReviewCount: inputProps.requiredApprovingReviewCount,
-        restrictions: inputProps.restrictions,
-        requireCodeOwnerReviews: inputProps.requireCodeOwnerReviews,
-        dismissStaleReviews: inputProps.dismissStaleReviews,
-        requiredStatusCheckContexts: inputProps.requiredStatusCheckContexts,
-        requireBranchesToBeUpToDate: inputProps.requireBranchesToBeUpToDate,
-        requiredConversationResolution:
-          inputProps.requiredConversationResolution,
-        requireLastPushApproval: inputProps.requireLastPushApproval,
-        repoVisibility: inputProps.repoVisibility,
-        defaultBranch: inputProps.defaultBranch,
-        protectDefaultBranch: inputProps.protectDefaultBranch,
-        protectEnforceAdmins: inputProps.protectEnforceAdmins,
-        deleteBranchOnMerge: inputProps.deleteBranchOnMerge,
-        gitCommitMessage: inputProps.gitCommitMessage,
-        gitAuthorName: inputProps.gitAuthorName,
-        gitAuthorEmail: inputProps.gitAuthorEmail,
-        allowMergeCommit: inputProps.allowMergeCommit,
-        allowSquashMerge: inputProps.allowSquashMerge,
-        squashMergeCommitTitle: inputProps.squashMergeCommitTitle,
-        squashMergeCommitMessage: inputProps.squashMergeCommitMessage,
-        allowRebaseMerge: inputProps.allowRebaseMerge,
-        allowAutoMerge: inputProps.allowAutoMerge,
-        allowUpdateBranch: inputProps.allowUpdateBranch,
-        sourcePath: inputProps.sourcePath,
-        collaborators: inputProps.collaborators,
-        hasProjects: inputProps.hasProjects,
-        hasWiki: inputProps.hasWiki,
-        hasIssues: inputProps.hasIssues,
-        token: inputProps.token,
-        topics: inputProps.topics,
-        repoVariables: inputProps.repoVariables,
-        secrets: inputProps.secrets,
-        oidcCustomization: inputProps.oidcCustomization,
-        requiredCommitSigning: inputProps.requiredCommitSigning,
-        requiredLinearHistory: inputProps.requiredLinearHistory,
-        customProperties: inputProps.customProperties,
-        subscribe: inputProps.subscribe,
+        ...inputProps,
       },
       output: {
         remoteUrl: outputProps.remoteUrl,
@@ -147,6 +105,7 @@ export function createPublishGithubAction(options: {
         subscribe = false,
         requiredCommitSigning = false,
         requiredLinearHistory = false,
+        workflowAccess,
       } = ctx.input;
 
       const { host, owner, repo } = parseRepoUrl(repoUrl, integrations);
@@ -198,6 +157,8 @@ export function createPublishGithubAction(options: {
             customProperties,
             subscribe,
             ctx.logger,
+            undefined, // autoInit
+            workflowAccess,
           );
 
           return {

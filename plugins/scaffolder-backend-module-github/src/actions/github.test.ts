@@ -80,6 +80,7 @@ const mockOctokit = {
       createRepoVariable: jest.fn(),
       createOrUpdateRepoSecret: jest.fn(),
       getRepoPublicKey: jest.fn(),
+      setWorkflowAccessToRepository: jest.fn(),
     },
     activity: {
       setRepoSubscription: jest.fn(),
@@ -1885,6 +1886,35 @@ describe('publish:github', () => {
       repo: 'repo',
       subscribed: true,
       ignored: false,
+    });
+  });
+
+  it('should configure workflowAccess', async () => {
+    mockOctokit.rest.users.getByUsername.mockResolvedValue({
+      data: { type: 'Organization' },
+    });
+    mockOctokit.rest.repos.createInOrg.mockResolvedValue({ data: {} });
+
+    mockOctokit.rest.actions.setWorkflowAccessToRepository.mockResolvedValueOnce(
+      {
+        data: {},
+      },
+    );
+
+    await action.handler({
+      ...mockContext,
+      input: {
+        ...mockContext.input,
+        workflowAccess: 'organization',
+      },
+    });
+
+    expect(
+      mockOctokit.rest.actions.setWorkflowAccessToRepository,
+    ).toHaveBeenCalledWith({
+      access_level: 'organization',
+      owner: 'owner',
+      repo: 'repo',
     });
   });
 
