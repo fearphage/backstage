@@ -12,7 +12,7 @@ to the workflows during creation.
     id: create-repo
     input:
       repoUrl: github.com?owner=owner&repo=repo
-      visibility: private
+      repoVisibility: private
 +     workflowAccess: organization
 ```
 

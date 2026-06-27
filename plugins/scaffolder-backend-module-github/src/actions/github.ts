@@ -64,6 +64,7 @@ export function createPublishGithubAction(options: {
     },
     async handler(ctx) {
       const {
+        autoInit,
         repoUrl,
         description,
         homepage,
@@ -157,7 +158,7 @@ export function createPublishGithubAction(options: {
             customProperties,
             subscribe,
             ctx.logger,
-            undefined, // autoInit
+            autoInit,
             workflowAccess,
           );
 
