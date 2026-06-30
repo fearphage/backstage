@@ -394,15 +394,23 @@ export function createPublishGithubAction(options: {
 }): TemplateAction<
   {
     repoUrl: string;
+    description?: string | undefined;
+    sourcePath?: string | undefined;
+    token?: string | undefined;
+    subscribe?: boolean | undefined;
+    homepage?: string | undefined;
     access?: string | undefined;
-    allowAutoMerge?: boolean | undefined;
-    allowMergeCommit?: boolean | undefined;
-    allowRebaseMerge?: boolean | undefined;
-    allowSquashMerge?: boolean | undefined;
-    allowUpdateBranch?: boolean | undefined;
-    autoInit?: boolean | undefined;
-    blockCreations?: boolean | undefined;
-    branch?: string | undefined;
+    restrictions?:
+      | {
+          users: string[];
+          teams: string[];
+          apps?: string[] | undefined;
+        }
+      | undefined;
+    topics?: string[] | undefined;
+    secrets?: Record<string, string> | undefined;
+    defaultBranch?: string | undefined;
+    requireCodeOwnerReviews?: boolean | undefined;
     bypassPullRequestAllowances?:
       | {
           users?: string[] | undefined;
@@ -410,6 +418,20 @@ export function createPublishGithubAction(options: {
           teams?: string[] | undefined;
         }
       | undefined;
+    requiredApprovingReviewCount?: number | undefined;
+    requiredStatusCheckContexts?: string[] | undefined;
+    requireBranchesToBeUpToDate?: boolean | undefined;
+    requiredConversationResolution?: boolean | undefined;
+    requireLastPushApproval?: boolean | undefined;
+    dismissStaleReviews?: boolean | undefined;
+    requiredCommitSigning?: boolean | undefined;
+    requiredLinearHistory?: boolean | undefined;
+    allowAutoMerge?: boolean | undefined;
+    allowMergeCommit?: boolean | undefined;
+    allowRebaseMerge?: boolean | undefined;
+    allowSquashMerge?: boolean | undefined;
+    allowUpdateBranch?: boolean | undefined;
+    autoInit?: boolean | undefined;
     collaborators?:
       | (
           | {
@@ -423,17 +445,13 @@ export function createPublishGithubAction(options: {
         )[]
       | undefined;
     customProperties?: Record<string, string | string[]> | undefined;
-    defaultBranch?: string | undefined;
     deleteBranchOnMerge?: boolean | undefined;
-    description?: string | undefined;
-    dismissStaleReviews?: boolean | undefined;
     gitAuthorEmail?: string | undefined;
     gitAuthorName?: string | undefined;
     gitCommitMessage?: string | undefined;
     hasIssues?: boolean | undefined;
     hasProjects?: boolean | undefined;
     hasWiki?: boolean | undefined;
-    homepage?: string | undefined;
     oidcCustomization?:
       | {
           useDefault: boolean;
@@ -444,32 +462,12 @@ export function createPublishGithubAction(options: {
     protectEnforceAdmins?: boolean | undefined;
     repoVariables?: Record<string, string> | undefined;
     repoVisibility?: 'internal' | 'private' | 'public' | undefined;
-    requireBranchesToBeUpToDate?: boolean | undefined;
-    requireCodeOwnerReviews?: boolean | undefined;
-    requiredApprovingReviewCount?: number | undefined;
-    requiredCommitSigning?: boolean | undefined;
-    requiredConversationResolution?: boolean | undefined;
-    requiredLinearHistory?: boolean | undefined;
-    requiredStatusCheckContexts?: string[] | undefined;
-    requireLastPushApproval?: boolean | undefined;
-    restrictions?:
-      | {
-          users: string[];
-          teams: string[];
-          apps?: string[] | undefined;
-        }
-      | undefined;
-    secrets?: Record<string, string> | undefined;
-    sourcePath?: string | undefined;
     squashMergeCommitMessage?:
       | 'PR_BODY'
       | 'COMMIT_MESSAGES'
       | 'BLANK'
       | undefined;
     squashMergeCommitTitle?: 'PR_TITLE' | 'COMMIT_OR_PR_TITLE' | undefined;
-    subscribe?: boolean | undefined;
-    token?: string | undefined;
-    topics?: string[] | undefined;
     workflowAccess?: 'none' | 'organization' | 'user' | undefined;
   },
   {
