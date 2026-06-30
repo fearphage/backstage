@@ -67,7 +67,11 @@ export function createPublishGithubAction(options: {
     examples,
     schema: {
       input: {
-        ...withoutProperties(inputProps, ['blockCreations', 'branch']),
+        ...withoutProperties(inputProps, [
+          'autoInit',
+          'blockCreations',
+          'branch',
+        ]),
       },
       output: {
         remoteUrl: outputProps.remoteUrl,

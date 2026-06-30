@@ -431,7 +431,6 @@ export function createPublishGithubAction(options: {
     allowRebaseMerge?: boolean | undefined;
     allowSquashMerge?: boolean | undefined;
     allowUpdateBranch?: boolean | undefined;
-    autoInit?: boolean | undefined;
     collaborators?:
       | (
           | {
