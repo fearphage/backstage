@@ -47,6 +47,19 @@ export function createPublishGithubAction(options: {
 }) {
   const { integrations, config, githubCredentialsProvider } = options;
 
+  function dynamicOmit<T extends object, K extends keyof T>(
+    object: T,
+    keys: K[],
+  ): Omit<T, K> {
+    const result = { ...object };
+
+    keys.forEach(key => {
+      delete result[key];
+    });
+
+    return result;
+  }
+
   return createTemplateAction({
     id: 'publish:github',
     description:
@@ -54,7 +67,7 @@ export function createPublishGithubAction(options: {
     examples,
     schema: {
       input: {
-        ...inputProps,
+        ...dynamicOmit(inputProps, ['blockCreations', 'branch']),
       },
       output: {
         remoteUrl: outputProps.remoteUrl,

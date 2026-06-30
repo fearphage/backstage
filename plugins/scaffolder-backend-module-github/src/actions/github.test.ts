@@ -121,6 +121,27 @@ describe('publish:github', () => {
     },
   });
 
+  const runHandlerForType = async (
+    type: 'organization' | 'user',
+    input: any = null,
+  ) => {
+    mockOctokit.rest.users.getByUsername.mockResolvedValue({
+      data: { type: `${type.at(0)?.toUpperCase()}${type.slice(1)}` },
+    });
+
+    const methodName =
+      type === 'organization' ? 'createInOrg' : 'createForAuthenticatedUser';
+    mockOctokit.rest.repos[methodName].mockResolvedValue({ data: {} });
+
+    return action.handler({
+      ...mockContext,
+      input: {
+        ...mockContext.input,
+        ...input,
+      },
+    });
+  };
+
   beforeEach(() => {
     octokitMock.mockImplementation(() => mockOctokit);
     initRepoAndPushMocked.mockResolvedValue({
@@ -1889,30 +1910,53 @@ describe('publish:github', () => {
     });
   });
 
-  it('should configure workflowAccess', async () => {
-    mockOctokit.rest.users.getByUsername.mockResolvedValue({
-      data: { type: 'Organization' },
-    });
-    mockOctokit.rest.repos.createInOrg.mockResolvedValue({ data: {} });
+  it('should configure autoInit for orgs', async () => {
+    await runHandlerForType('organization', { autoInit: true });
 
+    expect(mockOctokit.rest.repos.createInOrg).toHaveBeenCalledWith(
+      expect.objectContaining({ auto_init: true }),
+    );
+  });
+
+  it('should configure autoInit for users', async () => {
+    await runHandlerForType('user', { autoInit: false });
+
+    expect(
+      mockOctokit.rest.repos.createForAuthenticatedUser,
+    ).toHaveBeenCalledWith(expect.objectContaining({ auto_init: false }));
+  });
+
+  it('should configure workflowAccess for orgs', async () => {
     mockOctokit.rest.actions.setWorkflowAccessToRepository.mockResolvedValueOnce(
       {
         data: {},
       },
     );
 
-    await action.handler({
-      ...mockContext,
-      input: {
-        ...mockContext.input,
-        workflowAccess: 'organization',
-      },
-    });
+    await runHandlerForType('organization', { workflowAccess: 'organization' });
 
     expect(
       mockOctokit.rest.actions.setWorkflowAccessToRepository,
     ).toHaveBeenCalledWith({
       access_level: 'organization',
+      owner: 'owner',
+      repo: 'repo',
+    });
+  });
+
+  it('should configure workflowAccess for users', async () => {
+    mockOctokit.rest.actions.setWorkflowAccessToRepository.mockResolvedValueOnce(
+      {
+        data: {},
+      },
+    );
+
+    await runHandlerForType('user', { workflowAccess: 'user' });
+
+    expect(
+      mockOctokit.rest.actions.setWorkflowAccessToRepository,
+    ).toHaveBeenCalledWith({
+      access_level: 'user',
       owner: 'owner',
       repo: 'repo',
     });
