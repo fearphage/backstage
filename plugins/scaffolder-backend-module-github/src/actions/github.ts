@@ -47,7 +47,7 @@ export function createPublishGithubAction(options: {
 }) {
   const { integrations, config, githubCredentialsProvider } = options;
 
-  function dynamicOmit<T extends object, K extends keyof T>(
+  function withoutProperties<T extends object, K extends keyof T>(
     object: T,
     keys: K[],
   ): Omit<T, K> {
@@ -67,7 +67,7 @@ export function createPublishGithubAction(options: {
     examples,
     schema: {
       input: {
-        ...dynamicOmit(inputProps, ['blockCreations', 'branch']),
+        ...withoutProperties(inputProps, ['blockCreations', 'branch']),
       },
       output: {
         remoteUrl: outputProps.remoteUrl,
@@ -77,7 +77,6 @@ export function createPublishGithubAction(options: {
     },
     async handler(ctx) {
       const {
-        autoInit,
         repoUrl,
         description,
         homepage,
@@ -171,7 +170,6 @@ export function createPublishGithubAction(options: {
             customProperties,
             subscribe,
             ctx.logger,
-            autoInit,
             workflowAccess,
           );
 

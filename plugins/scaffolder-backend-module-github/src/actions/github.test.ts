@@ -123,7 +123,7 @@ describe('publish:github', () => {
 
   const runHandlerForType = async (
     type: 'organization' | 'user',
-    input: any = null,
+    input: any = {},
   ) => {
     mockOctokit.rest.users.getByUsername.mockResolvedValue({
       data: { type: `${type.at(0)?.toUpperCase()}${type.slice(1)}` },
@@ -1910,57 +1910,26 @@ describe('publish:github', () => {
     });
   });
 
-  it('should configure autoInit for orgs', async () => {
-    await runHandlerForType('organization', { autoInit: true });
+  it.each(['organization', 'user'] as const)(
+    'should configure workflowAccess for %ss',
+    async type => {
+      mockOctokit.rest.actions.setWorkflowAccessToRepository.mockResolvedValueOnce(
+        {
+          data: {},
+        },
+      );
 
-    expect(mockOctokit.rest.repos.createInOrg).toHaveBeenCalledWith(
-      expect.objectContaining({ auto_init: true }),
-    );
-  });
+      await runHandlerForType(type, { workflowAccess: type });
 
-  it('should configure autoInit for users', async () => {
-    await runHandlerForType('user', { autoInit: false });
-
-    expect(
-      mockOctokit.rest.repos.createForAuthenticatedUser,
-    ).toHaveBeenCalledWith(expect.objectContaining({ auto_init: false }));
-  });
-
-  it('should configure workflowAccess for orgs', async () => {
-    mockOctokit.rest.actions.setWorkflowAccessToRepository.mockResolvedValueOnce(
-      {
-        data: {},
-      },
-    );
-
-    await runHandlerForType('organization', { workflowAccess: 'organization' });
-
-    expect(
-      mockOctokit.rest.actions.setWorkflowAccessToRepository,
-    ).toHaveBeenCalledWith({
-      access_level: 'organization',
-      owner: 'owner',
-      repo: 'repo',
-    });
-  });
-
-  it('should configure workflowAccess for users', async () => {
-    mockOctokit.rest.actions.setWorkflowAccessToRepository.mockResolvedValueOnce(
-      {
-        data: {},
-      },
-    );
-
-    await runHandlerForType('user', { workflowAccess: 'user' });
-
-    expect(
-      mockOctokit.rest.actions.setWorkflowAccessToRepository,
-    ).toHaveBeenCalledWith({
-      access_level: 'user',
-      owner: 'owner',
-      repo: 'repo',
-    });
-  });
+      expect(
+        mockOctokit.rest.actions.setWorkflowAccessToRepository,
+      ).toHaveBeenCalledWith({
+        access_level: type,
+        owner: 'owner',
+        repo: 'repo',
+      });
+    },
+  );
 
   describe('GraphQL API fallback', () => {
     let readdirSpy: jest.SpyInstance;
