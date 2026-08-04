@@ -236,7 +236,7 @@ jobs:
           --health-retries 5
         ports:
           - 3306/tcp
-      redis:
+      redis: &redis-config
         image: redis:7
         options: >-
           --health-cmd "redis-cli ping"
@@ -245,6 +245,9 @@ jobs:
           --health-retries 5
         ports:
           - 6379/tcp
+      valkey:
+        <<: *redis-config
+        image: valkey/valkey:8
 
     env:
       CI: true
@@ -307,6 +310,7 @@ jobs:
           BACKSTAGE_TEST_DATABASE_POSTGRES14_CONNECTION_STRING: postgresql://postgres:postgres@localhost:${{ job.services.postgres14.ports[5432] }}
           BACKSTAGE_TEST_DATABASE_MYSQL8_CONNECTION_STRING: mysql://root:root@localhost:${{ job.services.mysql8.ports[3306] }}/ignored
           BACKSTAGE_TEST_CACHE_REDIS7_CONNECTION_STRING: redis://localhost:${{ job.services.redis.ports[6379] }}
+          BACKSTAGE_TEST_CACHE_VALKEY8_CONNECTION_STRING: valkey://localhost:${{ job.services.valkey.ports[6379] }}
 
       # Save successful test results even if other tests failed
       - name: save backstage-cli cache
