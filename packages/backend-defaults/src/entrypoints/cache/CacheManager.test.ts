@@ -64,6 +64,18 @@ jest.mock('@keyv/memcache', () => {
 jest.setTimeout(60_000);
 
 const caches = TestCaches.create();
+const PLUGIN_MAP = {
+  memory: KeyvMemcache,
+  redis: KeyvRedis,
+  valkey: KeyvValkey,
+} as const;
+
+const isValidPluginName = (plugin: string): plugin is keyof typeof PLUGIN_MAP =>
+  Object.hasOwn(PLUGIN_MAP, plugin);
+
+// tests will fail when passed an invalid plugin name
+const getPlugin = (plugin: string) =>
+  isValidPluginName(plugin) ? PLUGIN_MAP[plugin] : null;
 
 describe.each(caches.eachSupportedId())(
   'CacheManager integration, %p',
@@ -72,6 +84,7 @@ describe.each(caches.eachSupportedId())(
 
     it('only creates one underlying connection per plugin', async () => {
       const { store, connection } = await caches.init(cacheId);
+      const expectedCalls = store === 'memory' ? 0 : 3;
 
       const manager = CacheManager.fromConfig(
         mockServices.rootConfig({
@@ -84,16 +97,7 @@ describe.each(caches.eachSupportedId())(
       manager.forPlugin('p2');
       manager.forPlugin('p3').withOptions({});
 
-      if (store === 'redis') {
-        // eslint-disable-next-line jest/no-conditional-expect
-        expect(KeyvRedis).toHaveBeenCalledTimes(3);
-      } else if (store === 'memcache') {
-        // eslint-disable-next-line jest/no-conditional-expect
-        expect(KeyvMemcache).toHaveBeenCalledTimes(3);
-      } else if (store === 'valkey') {
-        // eslint-disable-next-line jest/no-conditional-expect
-        expect(KeyvValkey).toHaveBeenCalledTimes(3);
-      }
+      expect(getPlugin(store)).toHaveBeenCalledTimes(expectedCalls);
     });
 
     it('interacts correctly with store', async () => {
@@ -443,19 +447,18 @@ describe('CacheManager store options', () => {
     });
   });
 
-  it('correctly applies namespace configuration to redis and valkey stores', () => {
-    const testCases = [
-      {
-        store: 'redis',
-        client: {
-          namespace: 'my-app',
-          keyPrefixSeparator: ':',
-        },
+  it.each([
+    {
+      store: 'redis' as const,
+      client: {
+        namespace: 'my-app',
+        keyPrefixSeparator: ':',
       },
-      { store: 'valkey', client: { keyPrefix: 'my-app:' } },
-    ];
-
-    testCases.forEach(({ store, client }) => {
+    },
+    { store: 'valkey' as const, client: { keyPrefix: 'my-app:' } },
+  ])(
+    'correctly applies namespace configuration for store: $store',
+    ({ client, store }) => {
       const manager = CacheManager.fromConfig(
         mockServices.rootConfig({
           data: {
@@ -474,21 +477,12 @@ describe('CacheManager store options', () => {
 
       manager.forPlugin('testPlugin');
 
-      if (store === 'redis') {
-        // eslint-disable-next-line jest/no-conditional-expect
-        expect(KeyvRedis).toHaveBeenCalledWith(
-          'redis://localhost:6379',
-          client,
-        );
-      } else if (store === 'valkey') {
-        // eslint-disable-next-line jest/no-conditional-expect
-        expect(KeyvValkey).toHaveBeenCalledWith(
-          'redis://localhost:6379',
-          client,
-        );
-      }
-    });
-  });
+      expect(getPlugin(store)).toHaveBeenCalledWith(
+        'redis://localhost:6379',
+        client,
+      );
+    },
+  );
 
   it('falls back to pluginId when no namespace is configured', () => {
     const manager = CacheManager.fromConfig(
